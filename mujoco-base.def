@@ -14,7 +14,43 @@ From: nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
     exit 1
   fi
 
-%runscript
+# %runscript
+#   # Check for license
+#   if [ -f "$HOME/.mujoco/mjkey.txt" ]; then
+#     echo "[ok] Mujuco key detected at $HOME/.mujoco/mjkey.txt"
+#   else
+#     echo "[Error] Mujoco key missing. Should be here: $HOME/.mujoco/mjkey.txt"
+#     exit 1
+#   fi
+
+#   # Create links to container Mujoco installation
+#   if [ -d "$HOME/.mujoco/mujoco200_linux" ]; then 
+#     if [ -L "$HOME/.mujoco/mujoco200_linux" ]; then
+#       # Symlink, we can remove
+#       rm "$HOME/.mujoco/mujoco200_linux"
+#     else
+#       echo "[Error] Conflicting Mujoco installation detected at $HOME/.mujoco/mujoco200_linux"
+#       exit 1
+#     fi
+#   fi
+#   rm -f "$HOME/.mujoco/mujoco200_linux"
+#   ln -s /work_dir/deps/mujoco/mujoco200_linux $HOME/.mujoco/mujoco200_linux
+
+#   echo "Some env variables"
+#   echo $PS1
+#   exec echo $PS1
+#   echo $MUJOCO_PY_MJKEY_PATH
+#   exec echo $MUJOCO_PY_MJKEY_PATH
+
+%environment
+  # export PS1="(mujoco base) $PS1"
+  export HOME="${HOME:-/work_dir}"
+  export MUJOCO_PY_MUJOCO_PATH=$HOME/.mujoco/mujoco200_linux
+  export LD_LIBRARY_PATH=/work_dir/deps/mujoco/mujoco200_linux/bin:/usr/local/lib:/usr/lib64:${LD_LIBRARY_PATH}
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco200_linux/bin
+  # export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so
+  export PATH=/work_dir/env/bin:$PATH
+
   # Check for license
   if [ -f "$HOME/.mujoco/mjkey.txt" ]; then
     echo "[ok] Mujuco key detected at $HOME/.mujoco/mjkey.txt"
@@ -35,14 +71,6 @@ From: nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
   fi
   rm -f "$HOME/.mujoco/mujoco200_linux"
   ln -s /work_dir/deps/mujoco/mujoco200_linux $HOME/.mujoco/mujoco200_linux
-
-%environment
-  export HOME="${HOME:-/work_dir}"
-  export MUJOCO_PY_MUJOCO_PATH=$HOME/.mujoco/mujoco200_linux
-  export LD_LIBRARY_PATH=/work_dir/deps/mujoco/mujoco200_linux/bin:/usr/local/lib:/usr/lib64:${LD_LIBRARY_PATH}
-  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco200_linux/bin
-  # export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so
-  export PATH=/work_dir/env/bin:$PATH
 
 %post
   export DEBIAN_FRONTEND=noninteractive
@@ -89,4 +117,5 @@ From: nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
       fasteners \
       lockfile
 
-  pip3 install -U mujoco-py
+  pip3 install mujoco-py
+  chmod 777 /usr/local/lib/python3.6/dist-packages/mujoco_py/generated
