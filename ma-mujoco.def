@@ -2,69 +2,91 @@ Bootstrap: docker
 From: nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
 
 %setup
-    mkdir -p $SINGULARITY_ROOTFS/install/mujoco
-    cp mjkey.txt $SINGULARITY_ROOTFS/install/mujoco/
+  mkdir -p $SINGULARITY_ROOTFS/work_dir/deps/mujoco
+  USER=$(pwd | awk '{split($0, a, "/"); print a[3]}')
+  U_HOME=$(eval echo "~$USER")
 
-%post
-    export INSTALL=/install
-    export MUJOCO_PY_MUJOCO_PATH=${INSTALL}/mujoco
-    export MUJOCO_PY_MJPRO_PATH=${INSTALL}/mujoco
-    export MUJOCO_PY_MJKEY_PATH=${INSTALL}/mujoco/mjkey.txt
-    export LD_LIBRARY_PATH=$MUJOCO_PY_MUJOCO_PATH/bin
-    export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so
-
-    # Install system deps
-    apt-get update && apt-get install -y \
-        wget \
-        unzip \
-        python3-pip \
-        git \
-        libosmesa6-dev \
-        libglew-dev \
-        patchelf \
-        libglfw3-dev \
-        libopenmpi-dev
-
-    # Clean up
-    apt-get autoremove && apt-get clean
-    rm -rf /var/lib/apt/lists/*
-
-    # Install MuJoCo
-    mkdir -p $MUJOCO_PY_MUJOCO_PATH
-    wget --no-check-certificate https://mujoco.org/download/mjpro150_linux.zip -O mujoco.zip
-    unzip mujoco.zip -d $MUJOCO_PY_MUJOCO_PATH
-    rm mujoco.zip
-
-    ls $MUJOCO_PY_MUJOCO_PATH
-    ls /install/mujoco
-    echo $MUJOCO_PY_MUJOCO_PATH
-    printenv
-
-    # Install MuJoCo & other helpful tools
-    pip3 install \
-        numpy \
-        glfw \
-        cffi \
-        Cython \
-        imageio \
-        lockfile
-    pip3 install -U 'mujoco-py<1.50.2,>=1.50.1'
-
-    # Install ma-emergence environment
-    mkdir -p ${INSTALL}/deps
-    git clone https://github.com/openai/mujoco-worldgen.git ${INSTALL}/deps/mujoco-worldgen 
-    git clone https://github.com/openai/multi-agent-emergence-environments.git ${INSTALL}/deps/multi-agent-emergence-environments/ 
-    pip3 install -r ${INSTALL}/deps/mujoco-worldgen/requirements.txt 
-    pip3 install -e ${INSTALL}/deps/mujoco-worldgen/ 
-    pip3 install -e ${INSTALL}/deps/multi-agent-emergence-environments/ 
-    pip3 install -r ${INSTALL}/deps/multi-agent-emergence-environments/requirements_ma_policy.txt
+  if [ -f "$U_HOME/.mujoco/mjkey.txt" ]; then
+    echo "[ok] Mujuco key detected at $U_HOME/.mujoco/mjkey.txt"
+    cp $U_HOME/.mujoco/mjkey.txt $SINGULARITY_ROOTFS/work_dir/deps/mujoco
+  else
+    echo "[Error] Mujoco key missing. Should be here: $U_HOME/.mujoco/mjkey.txt"
+    exit 1
+  fi
 
 %environment
-    export MUJOCO_PY_MUJOCO_PATH=/install/mujoco
-    export MUJOCO_PY_MJKEY_PATH=/install/mujoco/mjkey.txt
-    export LD_LIBRARY_PATH=$MUJOCO_PY_MUJOCO_PATH/bin
-    export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so
-    export /usr/lib/x86_64-linux-gnu/libGLEW.so
+  export HOME="${HOME:-/work_dir}"
+  export MUJOCO_PY_MUJOCO_PATH=$HOME/.mujoco/mujoco150
+  export LD_LIBRARY_PATH=/work_dir/deps/mujoco/mujoco150/bin:/usr/local/lib:/usr/lib64:${LD_LIBRARY_PATH}
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco150/bin
+  # export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so
+  export PATH=/work_dir/env/bin:$PATH
 
-# %files
-#   mjkey.txt $SINGULARITY_ROOTFS/install/mujoco
+  # Check for license
+  if [ -f "$HOME/.mujoco/mjkey.txt" ]; then
+    echo "[ok] Mujuco key detected at $HOME/.mujoco/mjkey.txt"
+  else
+    echo "[Error] Mujoco key missing. Should be here: $HOME/.mujoco/mjkey.txt"
+    exit 1
+  fi
+
+  # Create links to container Mujoco installation
+  if [ -d "$HOME/.mujoco/mujoco150" ]; then 
+    if [ -L "$HOME/.mujoco/mujoco150" ]; then
+      # Symlink, we can remove
+      rm "$HOME/.mujoco/mujoco150"
+    else
+      echo "[Error] Conflicting Mujoco installation detected at $HOME/.mujoco/mujoco150"
+      exit 1
+    fi
+  fi
+  rm -f "$HOME/.mujoco/mujoco150"
+  ln -s /work_dir/deps/mujoco/mujoco150 $HOME/.mujoco/mujoco150
+
+%post
+  export DEBIAN_FRONTEND=noninteractive
+  export LANG=C.UTF-8
+  export MUJOCO_PY_MUJOCO_PATH=/work_dir/deps/mujoco/mujoco150
+  export MUJOCO_PY_MJKEY_PATH=/work_dir/deps/mujoco/mjkey.txt
+  export LD_LIBRARY_PATH=/work_dir/deps/mujoco/mujoco150/bin:/usr/local/lib:/usr/lib64:${LD_LIBRARY_PATH}
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/work_dir/deps/mujoco/mujoco150/bin
+
+  apt-get update -y && apt-get install -y \
+    wget \
+    unzip \
+    git \
+    python3-pip
+
+  # Install MuJoCo
+  apt-get update
+  apt-get install -y libosmesa6-dev libglew-dev patchelf libglfw3-dev libopenmpi-dev
+
+  cd /work_dir/deps
+  wget --no-check-certificate https://mujoco.org/download/mujoco150.zip -O mujoco.zip
+  unzip mujoco.zip -d mujoco
+  rm mujoco.zip
+  export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so
+
+  wget -nv https://raw.githubusercontent.com/openai/mujoco-py/c5f60322467ec8ecc0db64c3e18a4da762c27e45/vendor/Xdummy -O /usr/local/bin/Xdummy
+  chmod +x /usr/local/bin/Xdummy
+
+  mkdir -p /usr/share/glvnd/egl_vendor.d/
+  wget -nv https://raw.githubusercontent.com/openai/mujoco-py/c5f60322467ec8ecc0db64c3e18a4da762c27e45/vendor/10_nvidia.json -O /usr/share/glvnd/egl_vendor.d/10_nvidia.json
+
+  cd mujoco/mujoco150/bin
+  cp *.so /usr/local/lib/
+
+  cd /work_dir
+
+  # Install MuJoCo & other helpful tools
+  pip3 install \
+      numpy \
+      glfw \
+      cffi \
+      Cython \
+      imageio \
+      fasteners \
+      lockfile
+
+  pip3 install mujoco-py
+  chmod 777 /usr/local/lib/python3.6/dist-packages/mujoco_py/generated
